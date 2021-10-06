@@ -153,22 +153,18 @@ class WinRTClientArgs(TypedDict, total=False):
 class BleakClientWinRT(BaseBleakClient):
     """Native Windows Bleak Client.
 
-    Implemented using `winrt <https://github.com/Microsoft/xlang/tree/master/src/package/pywinrt/projection>`_,
-    a package that enables Python developers to access Windows Runtime APIs directly from Python.
-
     Args:
         address_or_ble_device (str or BLEDevice): The Bluetooth address of the BLE peripheral
             to connect to or the ``BLEDevice`` object representing it.
-        winrt (dict): A dictionary of Windows-specific configuration values.
-        **timeout (float): Timeout for required ``BleakScanner.find_device_by_address`` call. Defaults to 10.0.
-        **disconnected_callback (callable): Callback that will be scheduled in the
-            event loop when the client is disconnected. The callable must take one
-            argument, which will be this client object.
+        services: Optional list of service UUIDs that will be used.
+        **timeout: Timeout for required ``BleakScanner.find_device_by_address`` call. Defaults to 10.0.
+        **winrt: A dictionary of Windows-specific configuration values.
     """
 
     def __init__(
         self,
         address_or_ble_device: Union[BLEDevice, str],
+        services: Optional[List[uuid.UUID]],
         *,
         winrt: WinRTClientArgs,
         **kwargs,
@@ -180,6 +176,7 @@ class BleakClientWinRT(BaseBleakClient):
             self._device_info = address_or_ble_device.details.adv.bluetooth_address
         else:
             self._device_info = None
+        self._requested_services = services
         self._requester: Optional[BluetoothLEDevice] = None
         self._services_changed_events: List[asyncio.Event] = []
         self._session_active_events: List[asyncio.Event] = []
@@ -643,11 +640,28 @@ class BleakClientWinRT(BaseBleakClient):
         if cache_mode is not None:
             args.append(cache_mode)
 
-        services: Sequence[GattDeviceService] = _ensure_success(
-            await FutureLike(self._requester.get_gatt_services_async(*srv_args)),
-            "services",
-            "Could not get GATT services",
-        )
+        services: Sequence[GattDeviceService]
+
+        if self._requested_services is None:
+            services = _ensure_success(
+                await FutureLike(self._requester.get_gatt_services_async(*srv_args)),
+                "services",
+                "Could not get GATT services",
+            )
+        else:
+            services = []
+            for s in self._requested_services:
+                services.extend(
+                    _ensure_success(
+                        await FutureLike(
+                            self._requester.get_gatt_services_for_uuid_async(
+                                s, *srv_args
+                            )
+                        ),
+                        "services",
+                        "Could not get GATT services",
+                    )
+                )
 
         for service in services:
             # Windows returns an ACCESS_DENIED error when trying to enumerate
@@ -663,6 +677,24 @@ class BleakClientWinRT(BaseBleakClient):
                 "characteristics",
                 f"Could not get GATT characteristics for {service}",
             )
+            if self._requested_services is None:
+                services: Sequence[GattDeviceService] = _ensure_success(
+                    await self._requester.get_gatt_services_async(cache_mode),
+                    "services",
+                    "Could not get GATT services",
+                )
+            else:
+                services = []
+                for s in map(uuid.UUID, self._requested_services):
+                    services.extend(
+                        _ensure_success(
+                            await self._requester.get_gatt_services_for_uuid_async(
+                                s, cache_mode
+                            ),
+                            "services",
+                            "Could not get GATT services for {s}",
+                        )
+                    )
 
             for characteristic in characteristics:
                 new_services.add_characteristic(

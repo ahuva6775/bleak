@@ -6,7 +6,7 @@ import asyncio
 import logging
 import uuid
 import warnings
-from typing import Optional, Union
+from typing import List, Optional, Union
 
 from android.broadcast import BroadcastReceiver
 from jnius import java_method
@@ -28,17 +28,25 @@ class BleakClientP4Android(BaseBleakClient):
     """A python-for-android Bleak Client
 
     Args:
-        address_or_ble_device (`BLEDevice` or str): The Bluetooth address of the BLE peripheral to connect to or the `BLEDevice` object representing it.
-
-    Keyword Args:
-        disconnected_callback (callable): Callback that will be scheduled in the
-            event loop when the client is disconnected. The callable must take one
-            argument, which will be this client object.
-        adapter (str): Bluetooth adapter to use for discovery. [unused]
+        address_or_ble_device:
+            The Bluetooth address of the BLE peripheral to connect to or the
+            :class:`BLEDevice` object representing it.
+        services:
+            Optional list of services UUIDs to filter.
     """
 
-    def __init__(self, address_or_ble_device: Union[BLEDevice, str], **kwargs):
+    def __init__(
+        self,
+        address_or_ble_device: Union[BLEDevice, str],
+        services: Optional[List[uuid.UUID]],
+        **kwargs,
+    ):
         super(BleakClientP4Android, self).__init__(address_or_ble_device, **kwargs)
+        self._requested_services = (
+            None
+            if services is None
+            else set(map(defs.UUID.fromString, map(str, services)))
+        )
         # kwarg "device" is for backwards compatibility
         self.__adapter = kwargs.get("adapter", kwargs.get("device", None))
         self.__gatt = None
@@ -97,13 +105,6 @@ class BleakClientP4Android(BaseBleakClient):
                 dispatchApi=self.__gatt.requestMtu,
                 dispatchParams=(517,),
                 resultApi="onMtuChanged",
-            )
-
-            logger.debug("discovering services...")
-            await self.__callbacks.perform_and_wait(
-                dispatchApi=self.__gatt.discoverServices,
-                dispatchParams=(),
-                resultApi="onServicesDiscovered",
             )
 
             await self.get_services()
@@ -246,11 +247,24 @@ class BleakClientP4Android(BaseBleakClient):
            A :py:class:`bleak.backends.service.BleakGATTServiceCollection` with this device's services tree.
 
         """
+        logger.debug("Get Services...")
+
         if self._services_resolved:
             return self.services
 
-        logger.debug("Get Services...")
+        logger.debug("discovering services...")
+        await self.__callbacks.perform_and_wait(
+            dispatchApi=self.__gatt.discoverServices,
+            dispatchParams=(),
+            resultApi="onServicesDiscovered",
+        )
+
         for java_service in self.__gatt.getServices():
+            if (
+                self._requested_services is not None
+                and java_service.getUuid() not in self._requested_services
+            ):
+                continue
 
             service = BleakGATTServiceP4Android(java_service)
             self.services.add_service(service)

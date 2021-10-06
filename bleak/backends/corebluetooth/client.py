@@ -6,13 +6,14 @@ Created on 2019-06-26 by kevincar <kevincarrolldavis@gmail.com>
 import asyncio
 import logging
 import uuid
-from typing import Optional, Union
+from typing import List, Optional, Union
 
 from CoreBluetooth import (
     CBCharacteristicWriteWithoutResponse,
     CBCharacteristicWriteWithResponse,
     CBPeripheral,
     CBPeripheralStateConnected,
+    CBUUID,
 )
 from Foundation import NSArray, NSData
 
@@ -38,13 +39,19 @@ class BleakClientCoreBluetooth(BaseBleakClient):
 
     Args:
         address_or_ble_device (`BLEDevice` or str): The Bluetooth address of the BLE peripheral to connect to or the `BLEDevice` object representing it.
+        services: Optional list of service UUIDs that will be used.
 
     Keyword Args:
         timeout (float): Timeout for required ``BleakScanner.find_device_by_address`` call. Defaults to 10.0.
 
     """
 
-    def __init__(self, address_or_ble_device: Union[BLEDevice, str], **kwargs):
+    def __init__(
+        self,
+        address_or_ble_device: Union[BLEDevice, str],
+        services: Optional[List[uuid.UUID]] = None,
+        **kwargs,
+    ):
         super(BleakClientCoreBluetooth, self).__init__(address_or_ble_device, **kwargs)
 
         self._peripheral: Optional[CBPeripheral] = None
@@ -56,6 +63,14 @@ class BleakClientCoreBluetooth(BaseBleakClient):
                 self._peripheral,
                 self._central_manager_delegate,
             ) = address_or_ble_device.details
+
+        self._requested_services = (
+            None
+            if services is None
+            else NSArray.alloc().initWithArray_(
+                list(map(CBUUID.UUIDWithString_, map(str, services)))
+            )
+        )
 
         self._services: Optional[NSArray] = None
 
@@ -194,7 +209,8 @@ class BleakClientCoreBluetooth(BaseBleakClient):
             return self.services
 
         logger.debug("Retrieving services...")
-        services = await self._delegate.discover_services()
+
+        services = await self._delegate.discover_services(self._requested_services)
 
         for service in services:
             serviceUUID = service.UUID().UUIDString()

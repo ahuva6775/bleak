@@ -1,6 +1,20 @@
 # -*- coding: utf-8 -*-
 
 from typing import Dict
+from uuid import UUID
+
+
+def to_uuid(uuid: str) -> UUID:
+    """
+    Converts a 16-bit or 128-bit UUID string to a ``UUID``.
+
+    If *uuid* is 4 characters, it is assumed to be a 16-bit UUID, otherwise it
+    is assumed to be a 128-bit UUID.
+    """
+    if len(uuid) == 4:
+        return UUID(f"0000{uuid}-0000-1000-8000-00805f9b34fb")
+
+    return UUID(uuid)
 
 
 uuid16_dict = {

@@ -19,6 +19,7 @@ from typing import (
     Awaitable,
     Callable,
     Dict,
+    Iterable,
     List,
     Optional,
     Tuple,
@@ -50,6 +51,7 @@ from .backends.scanner import (
 )
 from .backends.service import BleakGATTServiceCollection
 from .exc import BleakError
+from .uuids import to_uuid
 
 if TYPE_CHECKING:
     from .backends.bluezdbus.scanner import BlueZScannerArgs
@@ -376,6 +378,11 @@ class BleakClient:
             Callback that will be scheduled in the event loop when the client is
             disconnected. The callable must take one argument, which will be
             this client object.
+        services:
+            Optional list of services to filter. If provided, only these services
+            will be resolved. This may or may not reduce the time needed to
+            enumerate the services depending on if the OS supports such filtering
+            in the Bluetooth stack or not (should affect Windows and Mac).
         timeout:
             Timeout in seconds passed to the implicit ``discover`` call when
             ``address_or_ble_device`` is not a :class:`BLEDevice`. Defaults to 10.0.
@@ -412,6 +419,7 @@ class BleakClient:
         self,
         address_or_ble_device: Union[BLEDevice, str],
         disconnected_callback: Optional[Callable[[BleakClient], None]] = None,
+        services: Optional[Iterable[str]] = None,
         *,
         timeout: float = 10.0,
         winrt: WinRTClientArgs = {},
@@ -425,6 +433,7 @@ class BleakClient:
         self._backend = PlatformBleakClient(
             address_or_ble_device,
             disconnected_callback=disconnected_callback,
+            services=None if services is None else list(map(to_uuid, services)),
             timeout=timeout,
             winrt=winrt,
             **kwargs,

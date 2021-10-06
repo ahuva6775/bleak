@@ -38,7 +38,10 @@ async def main(args: argparse.Namespace):
 
     logger.info("connecting to device...")
 
-    async with BleakClient(device) as client:
+    async with BleakClient(
+        device,
+        services=args.services,
+    ) as client:
         logger.info("connected")
 
         for service in client.services:
@@ -104,6 +107,13 @@ if __name__ == "__main__":
         "--macos-use-bdaddr",
         action="store_true",
         help="when true use Bluetooth address instead of UUID on macOS",
+    )
+
+    parser.add_argument(
+        "--services",
+        nargs="+",
+        metavar="<uuid>",
+        help="if provided, only enumerate matching service(s)",
     )
 
     args = parser.parse_args()

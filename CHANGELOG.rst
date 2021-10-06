@@ -14,6 +14,8 @@ Added
 -----
 * Added optional hack to use Bluetooth address instead of UUID on macOS.
 * Added ``BleakScanner.find_device_by_name()`` class method.
+* Added optional ``services`` argument to ``BleakClient()`` to filter services
+  that will be used. Merged #654.
 
 Changed
 -------

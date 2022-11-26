@@ -62,7 +62,7 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 _logger.addHandler(logging.NullHandler())
 if bool(os.environ.get("BLEAK_LOGGING", False)):
-    FORMAT = "%(asctime)-15s %(name)-8s %(levelname)s: %(message)s"
+    FORMAT = "%(asctime)-15s %(name)-8s %(threadName)s %(levelname)s: %(message)s"
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.DEBUG)
     handler.setFormatter(logging.Formatter(fmt=FORMAT))
@@ -585,7 +585,13 @@ class BleakClient:
         Gets the collection of GATT services available on the device.
 
         The returned value is only valid as long as the device is connected.
+
+        Raises:
+            BleakError: if service discovery has not been performed yet during this connection.
         """
+        if not self._backend.services:
+            raise BleakError("Service Discovery has not been performed yet")
+
         return self._backend.services
 
     # I/O methods

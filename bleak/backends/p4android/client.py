@@ -152,8 +152,7 @@ class BleakClientP4Android(BaseBleakClient):
         self.__callbacks = None
 
         # Reset all stored services.
-        self.services = BleakGATTServiceCollection()
-        self._services_resolved = False
+        self.services = None
 
         return True
 
@@ -247,18 +246,12 @@ class BleakClientP4Android(BaseBleakClient):
            A :py:class:`bleak.backends.service.BleakGATTServiceCollection` with this device's services tree.
 
         """
-        logger.debug("Get Services...")
-
-        if self._services_resolved:
+        if self.services is not None:
             return self.services
 
-        logger.debug("discovering services...")
-        await self.__callbacks.perform_and_wait(
-            dispatchApi=self.__gatt.discoverServices,
-            dispatchParams=(),
-            resultApi="onServicesDiscovered",
-        )
+        services = BleakGATTServiceCollection()
 
+        logger.debug("Get Services...")
         for java_service in self.__gatt.getServices():
             if (
                 self._requested_services is not None
@@ -267,7 +260,7 @@ class BleakClientP4Android(BaseBleakClient):
                 continue
 
             service = BleakGATTServiceP4Android(java_service)
-            self.services.add_service(service)
+            services.add_service(service)
 
             for java_characteristic in java_service.getCharacteristics():
 
@@ -277,7 +270,7 @@ class BleakClientP4Android(BaseBleakClient):
                     service.handle,
                     self.__mtu - 3,
                 )
-                self.services.add_characteristic(characteristic)
+                services.add_characteristic(characteristic)
 
                 for descriptor_index, java_descriptor in enumerate(
                     java_characteristic.getDescriptors()
@@ -289,9 +282,9 @@ class BleakClientP4Android(BaseBleakClient):
                         characteristic.handle,
                         descriptor_index,
                     )
-                    self.services.add_descriptor(descriptor)
+                    services.add_descriptor(descriptor)
 
-        self._services_resolved = True
+        self.services = services
         return self.services
 
     # IO methods

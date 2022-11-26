@@ -122,7 +122,7 @@ def _ensure_success(result: Any, attr: Optional[str], fail_msg: str) -> Any:
     if status == GattCommunicationStatus.UNREACHABLE:
         raise BleakError(f"{fail_msg}: Unreachable")
 
-    raise BleakError(f"{fail_msg}: Unexpected status code 0x{result.status:02X}")
+    raise BleakError(f"{fail_msg}: Unexpected status code 0x{status:02X}")
 
 
 class WinRTClientArgs(TypedDict, total=False):
@@ -411,7 +411,6 @@ class BleakClientWinRT(BaseBleakClient):
                             # services did not change while getting services,
                             # so this is the final result
                             self.services = get_services_task.result()
-                            self._services_resolved = True
                             break
 
                         logger.debug(
@@ -460,10 +459,10 @@ class BleakClientWinRT(BaseBleakClient):
         self._notification_callbacks.clear()
 
         # Dispose all service components that we have requested and created.
-        for service in self.services:
-            service.obj.close()
-        self.services = BleakGATTServiceCollection()
-        self._services_resolved = False
+        if self.services:
+            for service in self.services:
+                service.obj.close()
+            self.services = None
 
         # Without this, disposing the BluetoothLEDevice won't disconnect it
         if self._session:
@@ -613,7 +612,7 @@ class BleakClientWinRT(BaseBleakClient):
         """
 
         # Return the Service Collection.
-        if self._services_resolved:
+        if self.services is not None:
             return self.services
 
         logger.debug(
